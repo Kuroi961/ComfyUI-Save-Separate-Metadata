@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# ComfyUI / generated data
+.meta/
+.thumbs/
+*.db
+*.db-wal
+*.db-shm
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Agent working directories
+.agent/
+.handoff/
+.response/
+
+# Backup files
+*.bak

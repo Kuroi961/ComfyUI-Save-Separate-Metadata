@@ -1,0 +1,19 @@
+[project]
+name = "save-separate-metadata"
+version = "1.0.0"
+description = "Save clean JPG, WebP, and PNG images from ComfyUI with workflow metadata stored in separate sidecar JSON files."
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []
+classifiers = [
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/Kuroi961/ComfyUI-Save-Separate-Metadata"
+Documentation = "https://github.com/Kuroi961/ComfyUI-Save-Separate-Metadata#readme"
+"Bug Tracker" = "https://github.com/Kuroi961/ComfyUI-Save-Separate-Metadata/issues"
+
+[tool.comfy]
+PublisherId = "kuroi961"
+DisplayName = "Save Separate Metadata"
