@@ -1,5 +1,7 @@
 # ComfyUI Save Separate Metadata
 
+https://github.com/user-attachments/assets/a3fc8205-fa33-42da-bb3f-99dfdd886967
+
 Save images from ComfyUI as clean JPG, WebP, or PNG files while keeping the
 workflow metadata in separate sidecar JSON files.
 
