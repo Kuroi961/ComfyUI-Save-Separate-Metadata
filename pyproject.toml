@@ -1,6 +1,6 @@
 [project]
 name = "save-separate-metadata"
-version = "1.0.0"
+version = "1.0.1"
 description = "Save clean JPG, WebP, and PNG images from ComfyUI with workflow metadata stored in separate sidecar JSON files."
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
