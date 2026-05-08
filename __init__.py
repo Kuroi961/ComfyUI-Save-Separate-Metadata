@@ -12,6 +12,8 @@ search, and drag-and-drop workflow restoration.
 import json
 import math
 import os
+import threading
+import time
 import numpy as np
 from PIL import Image
 
@@ -24,6 +26,9 @@ import server
 WEB_DIRECTORY = "./web"
 
 META_DIR_NAME = ".meta"
+_DRAWER_PROVIDER_NAME = "save-separate-metadata"
+_drawer_provider_registered = False
+_drawer_unregister_provider = None
 
 
 # ── Utility helpers ──
@@ -43,76 +48,84 @@ def _sanitize_for_json(obj):
     return obj
 
 
-def _extract_meta_parts(meta):
-    """Extract structured searchable parts from ComfyUI metadata.
-    Used by ComfyUI-Drawer for text-based search across workflows.
-    Returns dict with keys: s_classes, s_titles, s_inputs.
-    """
-    classes, titles, inputs = [], [], []
-    prompt = meta.get("prompt", {})
-    if isinstance(prompt, dict):
-        for _nid, node in prompt.items():
-            if not isinstance(node, dict):
-                continue
-            ct = node.get("class_type", "")
-            if ct:
-                classes.append(ct)
-            nm = node.get("_meta", {})
-            if isinstance(nm, dict):
-                t = nm.get("title", "")
-                if t:
-                    titles.append(t)
-            node_inputs = node.get("inputs", {})
-            if isinstance(node_inputs, dict):
-                for _k, v in node_inputs.items():
-                    if isinstance(v, str) and v:
-                        inputs.append(v)
-                    elif isinstance(v, (int, float)):
-                        inputs.append(str(v))
-    workflow = meta.get("workflow", {})
-    if isinstance(workflow, dict):
-        for wn in workflow.get("nodes", []):
-            if isinstance(wn, dict):
-                t = wn.get("title", "")
-                if t:
-                    titles.append(t)
-    return {
-        "s_classes": " ".join(classes),
-        "s_titles": " ".join(titles),
-        "s_inputs": " ".join(inputs),
-    }
+def _read_sidecar_json(meta_path):
+    """Read a sidecar JSON file and return raw ComfyUI metadata."""
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(meta, dict):
+        return None
+    if not (meta.get("prompt") or meta.get("workflow")):
+        return None
+    return meta
 
 
-def _notify_drawer_index(subfolder, filename, meta):
-    """Push searchable metadata to ComfyUI-Drawer's search index.
-    Fails silently if Drawer is not installed.
-    """
-    import threading
-    import urllib.request
+def _sidecar_path_for_media(root_path, subfolder, filename):
+    base_name = os.path.splitext(filename)[0]
+    return os.path.join(root_path, subfolder, META_DIR_NAME, f"{base_name}.json")
 
-    def _push():
-        parts = _extract_meta_parts(meta)
-        if not any(parts.values()):
-            return
+
+def _drawer_metadata_provider(ctx):
+    """Read .meta sidecars for Drawer's raw metadata pipeline."""
+    root_path = ctx.get("root_path") or folder_paths.get_output_directory()
+    subfolder = (ctx.get("subfolder") or "").replace("\\", "/").strip("/")
+    filename = ctx.get("name") or ctx.get("filename") or ""
+    if not root_path or not filename:
+        return None
+
+    media_path = ctx.get("path") or os.path.join(root_path, subfolder, filename)
+    if os.path.basename(os.path.dirname(media_path)) == META_DIR_NAME:
+        return None
+
+    meta_path = _sidecar_path_for_media(root_path, subfolder, filename)
+    return _read_sidecar_json(meta_path)
+
+
+def _register_drawer_provider():
+    """Register the raw sidecar reader with Drawer when Drawer is available."""
+    global _drawer_provider_registered, _drawer_unregister_provider
+    if _drawer_provider_registered:
+        return True
+
+    register = getattr(
+        server.PromptServer.instance,
+        "comfy_drawer_register_metadata_provider",
+        None,
+    )
+    if register is None:
         try:
-            port = server.PromptServer.instance.port
-            data = json.dumps({
-                "root": "output",
-                "subfolder": subfolder,
-                "name": filename,
-                **parts,
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                f"http://127.0.0.1:{port}/drawer/fs/index-update",
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=5)
+            from comfyui_drawer import register_metadata_provider as register
         except Exception:
-            pass
+            register = None
 
-    threading.Thread(target=_push, daemon=True).start()
+    if register is None:
+        return False
+
+    try:
+        _drawer_unregister_provider = register(
+            _drawer_metadata_provider,
+            name=_DRAWER_PROVIDER_NAME,
+            priority=40,
+        )
+        _drawer_provider_registered = True
+        print("[SepMeta] Registered Drawer metadata provider")
+        return True
+    except Exception as e:
+        print(f"[SepMeta] Drawer metadata provider registration failed: {e}")
+        return False
+
+
+def _retry_register_drawer_provider():
+    for _ in range(120):
+        if _register_drawer_provider():
+            return
+        time.sleep(0.5)
+
+
+threading.Thread(target=_retry_register_drawer_provider, daemon=True).start()
 
 
 def _save_sidecar_meta(full_output_folder, base_name, subfolder,
@@ -142,7 +155,7 @@ def _save_sidecar_meta(full_output_folder, base_name, subfolder,
     meta_path = os.path.join(meta_dir, f"{base_name}.json")
     with open(meta_path, 'w', encoding='utf-8') as f:
         json.dump(_sanitize_for_json(meta), f, ensure_ascii=False)
-    _notify_drawer_index(subfolder, filename, meta)
+    _register_drawer_provider()
 
 
 # ── API Endpoints ──

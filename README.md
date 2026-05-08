@@ -93,7 +93,10 @@ the sidecars become easier to manage:
 
 - Drawer Gallery can read sidecar metadata for workflow restore and metadata
   viewing.
-- Saved workflows are pushed into Drawer's search index.
+- Drawer Gallery search indexes sidecar metadata through Drawer's Python raw
+  metadata provider API. Rebuild the Gallery search index, or run Drawer's
+  metadata refresh, after installing or updating this extension so existing
+  sidecars become searchable.
 - Gallery move, rename, conflict-rename, delete, and root-crossing move events
   keep `.meta/*.json` files in sync.
 
@@ -148,6 +151,11 @@ These endpoints are provided for integration with other extensions:
 | `/sepmeta/move_meta` | `POST` | Move or rename sidecars after a file move event. Supports `root`, `srcRoot`, and per-file source/destination fields. |
 | `/sepmeta/delete_meta` | `POST` | Delete sidecars after file delete events. |
 | `/sepmeta/cleanup_meta` | `POST` | Delete orphaned sidecars that no longer have matching image files. |
+
+When ComfyUI-Drawer is installed, this extension also registers a Python
+raw metadata provider named `save-separate-metadata`. Drawer reads standard
+ComfyUI `prompt` and `workflow` data from that provider for Gallery workflow
+loading and SQLite metadata search indexing.
 
 The sidecar convention is:
 
